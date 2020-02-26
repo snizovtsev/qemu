@@ -1,0 +1,14 @@
+config BATTERY
+    bool
+    default y  ## remove
+    depends on LINUX
+
+#config BATTERY_PASSTHROUGH
+#    bool
+#    default y
+#    select BATTERY
+#
+#config BATTERY_ACPI
+#    bool
+#    default y
+#    select BATTERY

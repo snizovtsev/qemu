@@ -1,0 +1,5 @@
+# See docs/devel/tracing.txt for syntax documentation.
+
+# battery.c
+battery_mmio_read(uint64_t addr, unsigned size, uint32_t val) "Battery read 0x%016" PRIx64 " len:%u val: 0x%" PRIx32
+battery_mmio_write(uint64_t addr, unsigned size, uint32_t val) "Battery write 0x%016" PRIx64 " len:%u val: 0x%" PRIx32

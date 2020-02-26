@@ -42,6 +42,7 @@
 #include "sysemu/tpm.h"
 #include "hw/acpi/tpm.h"
 #include "hw/acpi/vmgenid.h"
+#include "hw/acpi/battery.h"
 #include "hw/boards.h"
 #include "sysemu/tpm_backend.h"
 #include "hw/rtc/mc146818rtc_regs.h"
@@ -2247,77 +2248,7 @@ build_dsdt(GArray *table_data, BIOSLinker *linker,
         aml_append(sb_scope, dev);
     }
 
-    if (1) {
-        Aml *pcl = aml_package(2);
-        aml_append(pcl, aml_name("\\_SB"));
-        aml_append(pcl, aml_name("BAT0"));
-
-        dev = aml_device("AC");
-        aml_append(dev, aml_name_decl("_HID", aml_string("ACPI0003")));
-        aml_append(dev, aml_name_decl("_UID", aml_int(0x00)));
-        aml_append(dev, aml_name_decl("_PCL", pcl));
-
-        method = aml_method("_PSR", 0, AML_NOTSERIALIZED);
-        aml_append(method, aml_return(aml_int(0)));
-        aml_append(dev, method);
-
-        method = aml_method("_STA", 0, AML_NOTSERIALIZED);
-        aml_append(method, aml_return(aml_int(0x0F)));
-        aml_append(dev, method);
-
-        scope = aml_scope("\\_SB");
-        aml_append(scope, dev);
-        aml_append(dsdt, scope);
-    }
-
-    if (1) {
-        Aml *pcl = aml_package(1);
-        aml_append(pcl, aml_name("\\_SB"));
-
-        dev = aml_device("BAT0");
-        aml_append(dev, aml_name_decl("_HID", aml_eisaid("PNP0C0A")));
-        aml_append(dev, aml_name_decl("_UID", aml_int(0x00)));
-        aml_append(dev, aml_name_decl("_PCL", pcl));
-
-        method = aml_method("_STA", 0, AML_NOTSERIALIZED);
-        aml_append(method, aml_return(aml_int(0x1F)));
-        aml_append(dev, method);
-
-        method = aml_method("_BIF", 0, AML_NOTSERIALIZED);
-        Aml *bif = aml_package(0xd);
-        aml_append(bif, aml_int(0x01)); // 0x00, Power Unit (0=mWh/mW, 1=mAh/mA)
-        aml_append(bif, aml_int(1000)); // 0x01, Design Capacity (mWh/mAh)
-        aml_append(bif, aml_int(900));  // 0x02, Last Full Charge Capacity (mWh/mAh)
-        aml_append(bif, aml_int(0x01)); // 0x03, Battery technology (0=Primary-Non-Recharge,1=Secondry-rechange)
-        aml_append(bif, aml_int(12000)); // 0x04, Design voltage (mV)
-        aml_append(bif, aml_int(100)); // 0x05, Design capacity of warning (mWh/mAh)
-        aml_append(bif, aml_int(50)); // 0x06, Design capacity of low (mWh/mAh)
-        aml_append(bif, aml_int(0x04)); // 0x07, Battery capacity gradularity 1 (mWh/mAh)
-        aml_append(bif, aml_int(0x04)); // 0x08, Battery capacity gradularity 2 (mWh/mAh)
-        aml_append(bif, aml_string("1")); // 0x09, Model number
-        aml_append(bif, aml_string("0")); // 0x0a, Serial number
-        aml_append(bif, aml_string("LI-ION")); // 0x0b, Battery type
-        aml_append(bif, aml_string("QEMU")); // 0x0c, OEM Information
-        //aml_append(method, aml_name_decl("BIF0", bif));
-        //aml_append(method, aml_return(aml_name("BIF0")));
-        aml_append(method, aml_return(bif));
-        aml_append(dev, method);
-
-        method = aml_method("_BST", 0, AML_NOTSERIALIZED);
-        Aml *bst = aml_package(0x4);
-        aml_append(bst, aml_int(0x1)); // 0x00, Battery state
-        aml_append(bst, aml_int(500)); // 0x01, Battery present rate (mW/mA)
-        aml_append(bst, aml_int(500)); // 0x02, Battery remaining capacity (mWh/mAh)
-        aml_append(bst, aml_int(6000)); // 0x03, Battery present voltage (mV)
-        //aml_append(method, aml_name_decl("BST0", bst));
-        //aml_append(method, aml_return(aml_name("BST0")));
-        aml_append(method, aml_return(bst));
-        aml_append(dev, method);
-
-        scope = aml_scope("\\_SB");
-        aml_append(scope, dev);
-        aml_append(dsdt, scope);
-    }
+    battery_build_acpi(NULL, dsdt);
 
     aml_append(dsdt, sb_scope);
 

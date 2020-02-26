@@ -3,6 +3,7 @@ source 9pfs/Kconfig
 source acpi/Kconfig
 source adc/Kconfig
 source audio/Kconfig
+source battery/Kconfig
 source block/Kconfig
 source char/Kconfig
 source core/Kconfig
