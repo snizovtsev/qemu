@@ -4,25 +4,35 @@
 #include "exec/address-spaces.h"
 #include "hw/qdev-core.h"
 #include "hw/qdev-properties.h"
+#include "qapi/error.h"
+#include "qapi/visitor.h"
 #include "hw/acpi/battery.h"
 #include "trace.h"
 
-#define TYPE_BATTERY_DEVICE "battery"  /* XXX */
+#define TYPE_BATTERY_DEVICE "battery"
 #define BATTERY(obj) OBJECT_CHECK(BatteryState, (obj), TYPE_BATTERY_DEVICE)
 
 typedef struct {
     DeviceState parent_obj;
     MemoryRegion mmio;
 
-    uint64_t charge_now;
+    uint32_t regs[BATTERY_R_MAX];
 } BatteryState;
 
 static uint64_t battery_mmio_read(void *opaque, hwaddr addr,
                                   unsigned size)
 {
     BatteryState *s = BATTERY(opaque);
-    trace_battery_mmio_read(addr, size, s->charge_now);
-    return s->charge_now;
+    uint32_t val;
+
+    if (addr <= BATTERY_A_MAX) {
+        val = s->regs[addr / 4];
+    } else {
+        val = 0;
+    }
+
+    trace_battery_mmio_read(addr, size, val);
+    return val;
 }
 
 static void battery_mmio_write(void *opaque, hwaddr addr,
@@ -36,26 +46,80 @@ static const MemoryRegionOps battery_memory_ops = {
     .read = battery_mmio_read,
     .write = battery_mmio_write,
     .endianness = DEVICE_LITTLE_ENDIAN,
+    .impl = {
+        .min_access_size = 4,
+        .max_access_size = 4,
+    },
     .valid = {
         .min_access_size = 1,
         .max_access_size = 8,
     },
 };
 
+static void battery_get_register(Object *obj, Visitor *v,
+                                 const char *name, void *opaque,
+                                 Error **errp)
+{
+    BatteryState *s = BATTERY(obj);
+    uintptr_t i = (uintptr_t) opaque;
+    uint32_t *reg;
+
+    reg = &s->regs[i];
+    visit_type_uint32(v, name, reg, errp);
+}
+
+static void battery_set_register(Object *obj, Visitor *v,
+                                 const char *name, void *opaque,
+                                 Error **errp)
+{
+    BatteryState *s = BATTERY(obj);
+    uintptr_t i = (uintptr_t) opaque;
+    Error *local_err = NULL;
+    uint32_t *reg, val;
+
+    visit_type_uint32(v, name, &val, &local_err);
+    if (local_err) {
+        goto out;
+    }
+
+    reg = &s->regs[i];
+    *reg = val;
+
+out:
+    error_propagate(errp, local_err);
+}
+
 static Property battery_properties[] = {
-    DEFINE_PROP_UINT64("charge_now", BatteryState, charge_now, 1500),
+    /* Indicates the units used by the battery to report its capacity and
+     * charge/discharge rate information to the OS.
+     *   0x0 – Capacity is reported in [mWh] and rate in [mW].
+     *   0x1 – Capacity is reported in [mAh] and rate in [mA].
+     */
+    /* DEFINE_PROP_UINT32("power_unit", BatteryState, power_unit, 0x1), */
     DEFINE_PROP_END_OF_LIST(),
 };
 
 static void battery_realize(DeviceState *dev, Error **errp)
 {
     BatteryState *s = BATTERY(dev);
+    /* TODO check that we are alone here */
 
-    /* XXX check that we are alone here */
     memory_region_init_io(&s->mmio, OBJECT(s), &battery_memory_ops, s,
-        "battery-mmio", 16);
-    memory_region_add_subregion(get_system_io(),
-         BATTERY_ADDR_BASE, &s->mmio);
+        "battery-mmio", BATTERY_MMIO_LEN);
+    memory_region_add_subregion(get_system_memory(),
+         BATTERY_MMIO_BASE, &s->mmio);
+}
+
+static void battery_class_property_add_register(ObjectClass *klass,
+                                                const char *name,
+                                                size_t reg)
+{
+    object_class_property_add(klass, name, "uint32",
+                              battery_get_register,
+                              battery_set_register,
+                              NULL, /* release */
+                              (void*) reg,
+                              NULL);
 }
 
 static void battery_class_init(ObjectClass *klass, void *data)
@@ -66,6 +130,21 @@ static void battery_class_init(ObjectClass *klass, void *data)
     device_class_set_props(dc, battery_properties);
     dc->user_creatable = true;
     dc->hotpluggable = false;
+
+    battery_class_property_add_register(klass, "voltage_now",
+                                        R_BATTERY_VOLTAGE_NOW);
+    battery_class_property_add_register(klass, "current_now",
+                                        R_BATTERY_CURRENT_NOW);
+    battery_class_property_add_register(klass, "charge_now",
+                                        R_BATTERY_CHARGE_NOW);
+    battery_class_property_add_register(klass, "voltage_min_design",
+                                        R_BATTERY_VOLTAGE_MIN_DESIGN);
+    battery_class_property_add_register(klass, "charge_full_design",
+                                        R_BATTERY_CHARGE_FULL_DESIGN);
+    battery_class_property_add_register(klass, "charge_full",
+                                        R_BATTERY_CHARGE_FULL);
+    battery_class_property_add_register(klass, "cycle_count",
+                                        R_BATTERY_CYCLE_COUNT);
 
     set_bit(DEVICE_CATEGORY_MISC, dc->categories);
 }
