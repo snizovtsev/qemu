@@ -1,4 +1,6 @@
-/* Support for generating ACPI control method battery device
+/*
+ * ACPI control method battery firmware handling
+ *
  * Copyright (C) 2020 Sergey Nizovtsev
  *
  * This program is free software; you can redistribute it and/or modify
@@ -18,15 +20,23 @@
 #include "qemu/osdep.h"
 #include "hw/acpi/battery.h"
 
+#define BATTERY_MODEL              "Virtual Battery"
+#define BATTERY_SERIAL             "00000"
+#define BATTERY_TECHNOLOGY         "LI-ION"
+#define BATTERY_MANUFACTURER       "QEMU"
 #define BATTERY_AC_PSR_OFFLINE     0x0
 #define BATTERY_AC_PSR_ONLINE      0x1
 
+/*
+ * Renders all MMIO registers into array of numbered 32-bit ACPI fields.
+ */
 static Aml *aml_battery_regs(const char *prefix, const char *region)
 {
+    char name[5]; /* "BR00\0" */
     Aml *regs;
-    char name[5];
     int i;
 
+    /* Check that name would fit to 4-charater ACPI limit */
     assert(strlen(prefix) == 2);
     assert(BATTERY_R_MAX < 100);
 
@@ -44,6 +54,10 @@ static Aml *aml_battery_regs(const char *prefix, const char *region)
     return regs;
 }
 
+/*
+ * External power supply device structure.
+ * ACPI 6.2 10.3
+ */
 static Aml *aml_ac_adapter(/* const char **rstate */void)
 {
     Aml *dev, *method, *pcl/* , *block */;
@@ -85,7 +99,10 @@ static Aml *aml_ac_adapter(/* const char **rstate */void)
     return dev;
 }
 
-/* Static battery information */
+/*
+ * Battery information that remains constant until the device is changed.
+ * ACPI 6.2 10.2.2.1
+ */
 static Aml* aml_battery_bif_package(const char *regs)
 {
     Aml *pkg = aml_package(0xd);
@@ -109,24 +126,28 @@ static Aml* aml_battery_bif_package(const char *regs)
     aml_append(pkg, /* 0x08, Capacity granularity between warning and full */
                aml_int(0x01 /* mAh */));
     aml_append(pkg, /* 0x09, Model number, model_name */
-               aml_string("Virtual Battery"));
+               aml_string(BATTERY_MODEL));
     aml_append(pkg, /* 0x0a, Serial number, serial_number */
-               aml_string("00000"));
+               aml_string(BATTERY_SERIAL));
     aml_append(pkg, /* 0x0b, Battery type, technology */
-               aml_string("LI-ION"));
+               aml_string(BATTERY_TECHNOLOGY));
     aml_append(pkg, /* 0x0c, OEM Information, manufacturer */
-               aml_string("QEMU"));
+               aml_string(BATTERY_MANUFACTURER));
 
     return pkg;
 }
 
-/* Runtime battery status */
+/*
+ * Present battery status.
+ * ACPI 6.2 10.2.2.6
+ */
 static Aml* aml_battery_bst_package(const char *regs)
 {
     Aml *pkg = aml_package(0x4);
 
+    /* TODO: handle low levels */
     aml_append(pkg, /* 0x00, Battery state, status */
-               aml_name("%s%02d", regs, R_BATTERY_STATE)); /* TODO: handle low levels */
+               aml_name("%s%02d", regs, R_BATTERY_STATE));
     aml_append(pkg, /* 0x01, Battery present rate (mA) */
                aml_name("%s%02d", regs, R_BATTERY_CURRENT_NOW));
     aml_append(pkg, /* 0x02, Battery remaining capacity (mAh) */
@@ -137,6 +158,10 @@ static Aml* aml_battery_bst_package(const char *regs)
     return pkg;
 }
 
+/*
+ * Control method battery device.
+ * ACPI 6.2 10.2
+ */
 static Aml* aml_battery(int id, const char *regs)
 {
     Aml *method, *pcl, *dev;
@@ -165,16 +190,12 @@ static Aml* aml_battery(int id, const char *regs)
     return dev;
 }
 
-void battery_build_acpi(BatteryIf *battery, Aml *table)
+void battery_build_acpi(Aml *scope)
 {
-    Aml *scope = aml_scope("\\_SB");
-
     aml_append(scope, aml_operation_region("CBAT", AML_SYSTEM_MEMORY,
                                            aml_int(BATTERY_MMIO_BASE),
                                            BATTERY_MMIO_LEN));
     aml_append(scope, aml_battery_regs("BR", "CBAT"));
     aml_append(scope, aml_ac_adapter());
     aml_append(scope, aml_battery(0, "BR"));
-
-    aml_append(table, scope);
 }

@@ -1,3 +1,22 @@
+/*
+ * QEMU battery backend
+ *
+ * Copyright (C) 2020 Sergey Nizovtsev
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include "qemu/osdep.h"
 
 #include "qemu/module.h"
@@ -9,13 +28,11 @@
 #include "hw/acpi/battery.h"
 #include "trace.h"
 
-#define TYPE_BATTERY_DEVICE "battery"
 #define BATTERY(obj) OBJECT_CHECK(BatteryState, (obj), TYPE_BATTERY_DEVICE)
 
 typedef struct {
     DeviceState parent_obj;
     MemoryRegion mmio;
-
     uint32_t regs[BATTERY_R_MAX];
 } BatteryState;
 
@@ -23,12 +40,10 @@ static uint64_t battery_mmio_read(void *opaque, hwaddr addr,
                                   unsigned size)
 {
     BatteryState *s = BATTERY(opaque);
-    uint32_t val;
+    uint32_t val = BATTERY_UNKNOWN;
 
     if (addr <= BATTERY_A_MAX) {
         val = s->regs[addr / 4];
-    } else {
-        val = 0;
     }
 
     trace_battery_mmio_read(addr, size, val);
@@ -90,12 +105,18 @@ out:
 }
 
 static Property battery_properties[] = {
-    /* Indicates the units used by the battery to report its capacity and
-     * charge/discharge rate information to the OS.
-     *   0x0 – Capacity is reported in [mWh] and rate in [mW].
-     *   0x1 – Capacity is reported in [mAh] and rate in [mA].
-     */
-    /* DEFINE_PROP_UINT32("power_unit", BatteryState, power_unit, 0x1), */
+    DEFINE_PROP_UINT32("voltage_min_design", BatteryState,
+                       regs[R_BATTERY_VOLTAGE_MIN_DESIGN],
+                       10000 /* 10V */),
+    DEFINE_PROP_UINT32("charge_full_design", BatteryState,
+                       regs[R_BATTERY_CHARGE_FULL_DESIGN],
+                       8000),
+    DEFINE_PROP_UINT32("charge_full", BatteryState,
+                       regs[R_BATTERY_CHARGE_FULL],
+                       6000),
+    DEFINE_PROP_UINT32("cycle_count", BatteryState,
+                       regs[R_BATTERY_CYCLE_COUNT],
+                       500),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -127,24 +148,19 @@ static void battery_class_init(ObjectClass *klass, void *data)
     DeviceClass *dc = DEVICE_CLASS(klass);
 
     dc->realize = battery_realize;
-    device_class_set_props(dc, battery_properties);
     dc->user_creatable = true;
     dc->hotpluggable = false;
 
+    /* Read-only properties */
+    device_class_set_props(dc, battery_properties);
+
+    /* Writable properties */
     battery_class_property_add_register(klass, "voltage_now",
                                         R_BATTERY_VOLTAGE_NOW);
     battery_class_property_add_register(klass, "current_now",
                                         R_BATTERY_CURRENT_NOW);
     battery_class_property_add_register(klass, "charge_now",
                                         R_BATTERY_CHARGE_NOW);
-    battery_class_property_add_register(klass, "voltage_min_design",
-                                        R_BATTERY_VOLTAGE_MIN_DESIGN);
-    battery_class_property_add_register(klass, "charge_full_design",
-                                        R_BATTERY_CHARGE_FULL_DESIGN);
-    battery_class_property_add_register(klass, "charge_full",
-                                        R_BATTERY_CHARGE_FULL);
-    battery_class_property_add_register(klass, "cycle_count",
-                                        R_BATTERY_CYCLE_COUNT);
 
     set_bit(DEVICE_CATEGORY_MISC, dc->categories);
 }

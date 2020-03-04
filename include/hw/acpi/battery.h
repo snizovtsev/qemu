@@ -13,8 +13,7 @@
 #include "hw/registerfields.h"
 #include "hw/acpi/aml-build.h"
 
-typedef void* BatteryIf; // XXX
-
+#define TYPE_BATTERY_DEVICE "battery"
 #define BATTERY_UNKNOWN            0xFFFFFFFF
 
 #define BATTERY_MMIO_BASE          0xFEF40000
@@ -34,6 +33,6 @@ REG32(BATTERY_CYCLE_COUNT, 0x3C)
 #define BATTERY_A_MAX A_BATTERY_CHARGE_FULL
 #define BATTERY_R_MAX R_BATTERY_CHARGE_FULL
 
-void battery_build_acpi(BatteryIf *battery, Aml *dev);
+void battery_build_acpi(Aml *scope);
 
 #endif // HW_ACPI_BATTERY_H

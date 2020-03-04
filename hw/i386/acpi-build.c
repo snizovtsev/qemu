@@ -1840,6 +1840,7 @@ build_dsdt(GArray *table_data, BIOSLinker *linker,
     int root_bus_limit = 0xFF;
     PCIBus *bus = NULL;
     TPMIf *tpm = tpm_find();
+    Object *battery;
     int i;
 
     dsdt = init_aml_allocator();
@@ -2248,7 +2249,10 @@ build_dsdt(GArray *table_data, BIOSLinker *linker,
         aml_append(sb_scope, dev);
     }
 
-    battery_build_acpi(NULL, dsdt);
+    battery = object_resolve_type_unambiguous(TYPE_BATTERY_DEVICE);
+    if (battery) {
+        battery_build_acpi(sb_scope);
+    }
 
     aml_append(dsdt, sb_scope);
 
