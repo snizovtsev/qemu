@@ -38,7 +38,7 @@ static Aml *aml_battery_regs(const char *prefix, const char *region)
 
     /* Check that name would fit to 4-charater ACPI limit */
     assert(strlen(prefix) == 2);
-    assert(BATTERY_R_MAX < 100);
+    QEMU_BUILD_BUG_ON(BATTERY_R_MAX >= 100);
 
     name[0] = prefix[0];
     name[1] = prefix[1];
@@ -78,22 +78,11 @@ static Aml *aml_ac_adapter(/* const char **rstate */void)
 
     /* Power Source */
     method = aml_method("_PSR", 0, AML_NOTSERIALIZED);
-
-    // new logic: if at least one battery charging then we have external power
-#if 0
-    /* Local0 = CBRI(STATUS); */
-    aml_append(method, aml_store(
-                   aml_call1("CBRI", aml_int(BATTERY_PROP_STATUS)),
-                   aml_local(0)));
-    /* If (status == discharging) return offline; */
-    block = aml_if(aml_equal(aml_local(0),
-                             aml_int(BATTERY_STATUS_DISCHARGING)));
-    aml_append(block, aml_return(aml_int(BATTERY_AC_PSR_OFFLINE)));
-    aml_append(method, block);
-
-#endif
-
-    aml_append(method, aml_return(aml_int(BATTERY_AC_PSR_OFFLINE)));
+    // FIXME: support multiple battaries
+    aml_append(method, aml_shiftright(aml_name("BR%02d", R_BATTERY_STATE),
+                                      aml_int(1), aml_local(0)));
+    aml_append(method, aml_and(aml_local(0), aml_int(1), aml_local(0)));
+    aml_append(method, aml_return(aml_local(0)));
     aml_append(dev, method);
 
     return dev;
@@ -192,10 +181,17 @@ static Aml* aml_battery(int id, const char *regs)
 
 void battery_build_acpi(Aml *scope)
 {
+    Aml *method;
+
     aml_append(scope, aml_operation_region("CBAT", AML_SYSTEM_MEMORY,
                                            aml_int(BATTERY_MMIO_BASE),
                                            BATTERY_MMIO_LEN));
     aml_append(scope, aml_battery_regs("BR", "CBAT"));
     aml_append(scope, aml_ac_adapter());
     aml_append(scope, aml_battery(0, "BR"));
+
+    method = aml_method("\\_GPE._E07", 0, AML_NOTSERIALIZED);
+    aml_append(method, aml_notify(aml_name("\\_SB.AC"), aml_int(0x80)));
+    aml_append(method, aml_notify(aml_name("\\_SB.BAT0"), aml_int(0x80)));
+    aml_append(scope, method);
 }

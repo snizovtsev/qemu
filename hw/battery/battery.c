@@ -26,6 +26,7 @@
 #include "qapi/error.h"
 #include "qapi/visitor.h"
 #include "hw/acpi/battery.h"
+#include "hw/acpi/acpi_dev_interface.h"
 #include "trace.h"
 
 #define BATTERY(obj) OBJECT_CHECK(BatteryState, (obj), TYPE_BATTERY_DEVICE)
@@ -87,6 +88,7 @@ static void battery_set_register(Object *obj, Visitor *v,
                                  const char *name, void *opaque,
                                  Error **errp)
 {
+    Object *acpidev = object_resolve_path_type("", TYPE_ACPI_DEVICE_IF, NULL);
     BatteryState *s = BATTERY(obj);
     uintptr_t i = (uintptr_t) opaque;
     Error *local_err = NULL;
@@ -99,6 +101,10 @@ static void battery_set_register(Object *obj, Visitor *v,
 
     reg = &s->regs[i];
     *reg = val;
+
+    if (acpidev && s->parent_obj.realized) {
+        acpi_send_event(DEVICE(acpidev), ACPI_BATTERY_STATUS);
+    }
 
 out:
     error_propagate(errp, local_err);
@@ -155,6 +161,8 @@ static void battery_class_init(ObjectClass *klass, void *data)
     device_class_set_props(dc, battery_properties);
 
     /* Writable properties */
+    battery_class_property_add_register(klass, "state",
+                                        R_BATTERY_STATE);
     battery_class_property_add_register(klass, "voltage_now",
                                         R_BATTERY_VOLTAGE_NOW);
     battery_class_property_add_register(klass, "current_now",
@@ -165,17 +173,15 @@ static void battery_class_init(ObjectClass *klass, void *data)
     set_bit(DEVICE_CATEGORY_MISC, dc->categories);
 }
 
-static const TypeInfo battery_info = {
-    .name = TYPE_BATTERY_DEVICE,
-    .parent = TYPE_DEVICE,
-    .instance_size = sizeof(BatteryState),
-    .class_init = battery_class_init,
-    .interfaces = (InterfaceInfo[]) {
-    }
-};
-
 static void battery_register(void)
 {
+    static const TypeInfo battery_info = {
+        .name = TYPE_BATTERY_DEVICE,
+        .parent = TYPE_DEVICE,
+        .instance_size = sizeof(BatteryState),
+        .class_init = battery_class_init,
+    };
+
     type_register_static(&battery_info);
 }
 
