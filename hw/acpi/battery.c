@@ -24,8 +24,6 @@
 #define BATTERY_SERIAL             "00000"
 #define BATTERY_TECHNOLOGY         "LI-ION"
 #define BATTERY_MANUFACTURER       "QEMU"
-#define BATTERY_AC_PSR_OFFLINE     0x0
-#define BATTERY_AC_PSR_ONLINE      0x1
 
 /*
  * Renders all MMIO registers into array of numbered 32-bit ACPI fields.

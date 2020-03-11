@@ -547,6 +547,12 @@ static inline DeviceState *create_acpi_ged(VirtMachineState *vms)
         event |= ACPI_GED_MEM_HOTPLUG_EVT;
     }
 
+    /**
+     * FIXME We should check if a battery device requested but
+     * cannot do it here, before machine initialized.
+     */
+    event |= ACPI_GED_BATTERY_EVT;
+
     dev = qdev_create(NULL, TYPE_ACPI_GED);
     qdev_prop_set_uint32(dev, "ged-event", event);
 

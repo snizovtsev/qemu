@@ -110,31 +110,21 @@ out:
     error_propagate(errp, local_err);
 }
 
-static Property battery_properties[] = {
-    DEFINE_PROP_UINT32("voltage_min_design", BatteryState,
-                       regs[R_BATTERY_VOLTAGE_MIN_DESIGN],
-                       10000 /* 10V */),
-    DEFINE_PROP_UINT32("charge_full_design", BatteryState,
-                       regs[R_BATTERY_CHARGE_FULL_DESIGN],
-                       8000),
-    DEFINE_PROP_UINT32("charge_full", BatteryState,
-                       regs[R_BATTERY_CHARGE_FULL],
-                       6000),
-    DEFINE_PROP_UINT32("cycle_count", BatteryState,
-                       regs[R_BATTERY_CYCLE_COUNT],
-                       500),
-    DEFINE_PROP_END_OF_LIST(),
-};
-
 static void battery_realize(DeviceState *dev, Error **errp)
 {
     BatteryState *s = BATTERY(dev);
     /* TODO check that we are alone here */
 
-    memory_region_init_io(&s->mmio, OBJECT(s), &battery_memory_ops, s,
-        "battery-mmio", BATTERY_MMIO_LEN);
     memory_region_add_subregion(get_system_memory(),
          BATTERY_MMIO_BASE, &s->mmio);
+}
+
+static void battery_initfn(Object *obj)
+{
+    BatteryState *s = BATTERY(obj);
+
+    memory_region_init_io(&s->mmio, obj, &battery_memory_ops, s,
+        "battery-mmio", BATTERY_MMIO_LEN);
 }
 
 static void battery_class_property_add_register(ObjectClass *klass,
@@ -149,39 +139,73 @@ static void battery_class_property_add_register(ObjectClass *klass,
                               NULL);
 }
 
+static PropertyInfo battery_voltage_min_design,
+                    battery_charge_full_design,
+                    battery_charge_full;
+
+#define VOLT (1000 * 1000)
+#define AMP_HOUR (1000 * 1000)
+
+static Property battery_properties[] = {
+    DEFINE_PROP_UNSIGNED("voltage-min-design-microvolt", BatteryState,
+                         regs[R_BATTERY_VOLTAGE_MIN_DESIGN], 10 * VOLT,
+                         battery_voltage_min_design, uint32_t),
+    DEFINE_PROP_UNSIGNED("charge-full-design-microamp-hours", BatteryState,
+                         regs[R_BATTERY_CHARGE_FULL_DESIGN], 8 * AMP_HOUR,
+                         battery_charge_full_design, uint32_t),
+    DEFINE_PROP_UNSIGNED("charge-full-microamp-hours", BatteryState,
+                         regs[R_BATTERY_CHARGE_FULL], 6 * AMP_HOUR,
+                         battery_charge_full, uint32_t),
+    DEFINE_PROP_UINT32("cycle-count", BatteryState,
+                       regs[R_BATTERY_CYCLE_COUNT],
+                       500),
+    DEFINE_PROP_END_OF_LIST(),
+};
+
 static void battery_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
 
+    dc->desc = "ACPI control method battery";
     dc->realize = battery_realize;
     dc->user_creatable = true;
     dc->hotpluggable = false;
 
-    /* Read-only properties */
-    device_class_set_props(dc, battery_properties);
+    battery_voltage_min_design = qdev_prop_uint32;
+    battery_voltage_min_design.description = "drained battery voltage";
+    battery_charge_full_design = qdev_prop_uint32;
+    battery_charge_full_design.description = "nominal capacity of a new battery";
+    battery_charge_full = qdev_prop_uint32;
+    battery_charge_full.description = "predicted capacity when fully charged";
 
     /* Writable properties */
     battery_class_property_add_register(klass, "state",
                                         R_BATTERY_STATE);
-    battery_class_property_add_register(klass, "voltage_now",
+    battery_class_property_add_register(klass, "voltage-now",
                                         R_BATTERY_VOLTAGE_NOW);
-    battery_class_property_add_register(klass, "current_now",
+    battery_class_property_add_register(klass, "current-now",
                                         R_BATTERY_CURRENT_NOW);
-    battery_class_property_add_register(klass, "charge_now",
+    battery_class_property_add_register(klass, "charge-now",
                                         R_BATTERY_CHARGE_NOW);
 
+    /* Read-only properties */
+    device_class_set_props(dc, battery_properties);
     set_bit(DEVICE_CATEGORY_MISC, dc->categories);
 }
 
+static const TypeInfo battery_info = {
+    .name = TYPE_BATTERY_DEVICE,
+    .parent = TYPE_DEVICE,
+    .instance_size = sizeof(BatteryState),
+    .instance_init = battery_initfn,
+    .class_init = battery_class_init,
+    .interfaces = (InterfaceInfo[]) {
+        { }
+    }
+};
+
 static void battery_register(void)
 {
-    static const TypeInfo battery_info = {
-        .name = TYPE_BATTERY_DEVICE,
-        .parent = TYPE_DEVICE,
-        .instance_size = sizeof(BatteryState),
-        .class_init = battery_class_init,
-    };
-
     type_register_static(&battery_info);
 }
 
