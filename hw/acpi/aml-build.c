@@ -482,6 +482,24 @@ Aml *aml_to_integer(Aml *arg)
     return var;
 }
 
+/* ACPI 2.0a: 17.2.4.4 Type 2 Opcodes Encoding: DefToString */
+Aml *aml_to_string(Aml *src, Aml *len, Aml *dst)
+{
+    Aml *var = aml_opcode(0x9C /* ToStringOp */);
+    aml_append(var, src);
+    if (len) {
+        aml_append(var, len);
+    } else {
+        build_append_byte(var->buf, 0x00 /* NullNameOp */);
+    }
+    if (dst) {
+        aml_append(var, dst);
+    } else {
+        build_append_byte(var->buf, 0x00 /* NullNameOp */);
+    }
+    return var;
+}
+
 /* ACPI 2.0a: 17.2.4.4 Type 2 Opcodes Encoding: DefToHexString */
 Aml *aml_to_hexstring(Aml *src, Aml *dst)
 {
