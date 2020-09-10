@@ -43,6 +43,7 @@
 #include "sysemu/tpm.h"
 #include "hw/acpi/tpm.h"
 #include "hw/acpi/vmgenid.h"
+#include "hw/acpi/shmem.h"
 #include "hw/boards.h"
 #include "sysemu/tpm_backend.h"
 #include "hw/rtc/mc146818rtc_regs.h"
@@ -2432,6 +2433,7 @@ void acpi_build(AcpiBuildTables *tables, MachineState *machine)
     GArray *tables_blob = tables->table_data;
     AcpiSlicOem slic_oem = { .id = NULL, .table_id = NULL };
     Object *vmgenid_dev;
+    Object *shmem_dev;
 
     acpi_get_pm_info(machine, &pm);
     acpi_get_misc_info(&misc);
@@ -2484,6 +2486,13 @@ void acpi_build(AcpiBuildTables *tables, MachineState *machine)
         acpi_add_table(table_offsets, tables_blob);
         vmgenid_build_acpi(VMGENID(vmgenid_dev), tables_blob,
                            tables->vmgenid, tables->linker);
+    }
+
+    shmem_dev = find_acpi_shmem();
+    if (shmem_dev) {
+        acpi_add_table(table_offsets, tables_blob);
+        acpi_shmem_add_table(ACPI_SHMEM(shmem_dev), tables_blob,
+                             tables->shmem, tables->linker);
     }
 
     if (misc.has_hpet) {
@@ -2684,6 +2693,7 @@ void acpi_setup(void)
     AcpiBuildTables tables;
     AcpiBuildState *build_state;
     Object *vmgenid_dev;
+    Object *shmem_dev;
     TPMIf *tpm;
     static FwCfgTPMConfig tpm_config;
 
@@ -2736,6 +2746,11 @@ void acpi_setup(void)
     if (vmgenid_dev) {
         vmgenid_add_fw_cfg(VMGENID(vmgenid_dev), x86ms->fw_cfg,
                            tables.vmgenid);
+    }
+
+    shmem_dev = find_acpi_shmem();
+    if (shmem_dev) {
+        acpi_shmem_add_fw_cfg(ACPI_SHMEM(shmem_dev), x86ms->fw_cfg);
     }
 
     if (!pcmc->rsdp_in_ram) {

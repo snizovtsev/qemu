@@ -41,7 +41,7 @@
 #include "hw/acpi/pci.h"
 #include "hw/acpi/memory_hotplug.h"
 #include "hw/acpi/generic_event_device.h"
-#include "hw/acpi/tpm.h"
+#include "hw/acpi/shmem.h"
 #include "hw/pci/pcie_host.h"
 #include "hw/pci/pci.h"
 #include "hw/pci-host/gpex.h"
@@ -611,24 +611,31 @@ build_dsdt(GArray *table_data, BIOSLinker *linker, VirtMachineState *vms)
     acpi_dsdt_add_pci(scope, memmap, (irqmap[VIRT_PCIE] + ARM_SPI_BASE),
                       vms->highmem, vms->highmem_ecam);
     if (vms->acpi_dev) {
+#if 0
+        Object *battery = object_resolve_path_type("", /*TYPE_BATTERY_DEVICE*/"battery", NULL);
+#endif
+        uint32_t event = object_property_get_uint(OBJECT(vms->acpi_dev),
+                                                  "ged-event", &error_abort);
+
         build_ged_aml(scope, "\\_SB."GED_DEVICE,
                       HOTPLUG_HANDLER(vms->acpi_dev),
                       irqmap[VIRT_ACPI_GED] + ARM_SPI_BASE, AML_SYSTEM_MEMORY,
                       memmap[VIRT_ACPI_GED].base);
-    } else {
-        acpi_dsdt_add_gpio(scope, &memmap[VIRT_GPIO],
-                           (irqmap[VIRT_GPIO] + ARM_SPI_BASE));
-    }
 
-    if (vms->acpi_dev) {
-        uint32_t event = object_property_get_uint(OBJECT(vms->acpi_dev),
-                                                  "ged-event", &error_abort);
+#if 0
+        if (battery) {
+            battery_build_acpi(scope);
+        }
+#endif
 
         if (event & ACPI_GED_MEM_HOTPLUG_EVT) {
             build_memory_hotplug_aml(scope, ms->ram_slots, "\\_SB", NULL,
                                      AML_SYSTEM_MEMORY,
                                      memmap[VIRT_PCDIMM_ACPI].base);
         }
+    } else {
+        acpi_dsdt_add_gpio(scope, &memmap[VIRT_GPIO],
+                           (irqmap[VIRT_GPIO] + ARM_SPI_BASE));
     }
 
     acpi_dsdt_add_power_button(scope);

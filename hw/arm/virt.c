@@ -560,6 +560,11 @@ static inline DeviceState *create_acpi_ged(VirtMachineState *vms)
     if (ms->nvdimms_state->is_enabled) {
         event |= ACPI_GED_NVDIMM_HOTPLUG_EVT;
     }
+    /**
+     * FIXME We should check if shmem device requested but
+     * cannot do it here, before machine initialized.
+     */
+    event |= ACPI_GED_SHMEM_EVT;
 
     dev = qdev_new(TYPE_ACPI_GED);
     qdev_prop_set_uint32(dev, "ged-event", event);

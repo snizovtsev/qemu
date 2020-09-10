@@ -221,6 +221,7 @@ struct AcpiBuildTables {
     GArray *tcpalog;
     GArray *vmgenid;
     GArray *hardware_errors;
+    GArray *shmem;
     BIOSLinker *linker;
 } AcpiBuildTables;
 
